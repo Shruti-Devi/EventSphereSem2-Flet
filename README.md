@@ -1,2 +1,16 @@
 # EventSphereSem2-Flet
-Web and Mobile Application Development Assignment Semester 2
+
+Simple Flet mobile app for the Semester 2 EventSphere project.
+
+The app has 3 simple screens:
+- Login
+- Register
+- Forgot Password
+
+The colors and text follow the existing EventSphere web pages.
+
+## Run
+
+```bash
+uv run flet run
+```
