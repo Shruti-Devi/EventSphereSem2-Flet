@@ -2,6 +2,7 @@ import os
 
 import flet as ft
 import httpx
+from datetime import date, datetime
 
 
 PAGE_COLOR = "#CFD7E9"
@@ -43,12 +44,36 @@ async def main(page: ft.Page):
         )
         status_text = ft.Text("", color=ft.Colors.RED_700, text_align=ft.TextAlign.CENTER)
 
-        def login_click(e):
+        async def login_click(e):
             if email_input.value == "" or password_input.value == "":
                 status_text.value = "Enter your email and password."
-            else:
-                status_text.value = ""
-                show_blank_page()
+            page.update()
+            if status_text.value != "":
+                return
+
+            status_text.value = "Logging in..."
+            page.update()
+
+            async with httpx.AsyncClient() as client:
+                try:
+                    response = await client.post(
+                        f"{BASE_URL}/api/mobile-login/",
+                        json={
+                            "email": email_input.value,
+                            "password": password_input.value,
+                        },
+                    )
+                    data = response.json()
+
+                    if response.status_code == 200 and data.get("success") is True:
+                        status_text.value = ""
+                        show_blank_page()
+                        return
+
+                    status_text.value = data.get("message", "Login failed.")
+                except Exception as ex:
+                    status_text.value = f"Error: {ex}"
+
             page.update()
 
         login_card = ft.Container(
@@ -159,10 +184,30 @@ async def main(page: ft.Page):
         dob = ft.TextField(
             label="Date of Birth",
             width=320,
+            read_only=True,
             bgcolor=ft.Colors.WHITE,
             border_color=INPUT_BORDER,
             focused_border_color=LINK_COLOR,
         )
+
+        def dob_change(e):
+            if dob_picker.value:
+                v = dob_picker.value
+                if isinstance(v, datetime):
+                    v = v.date()
+                dob.value = v.isoformat()
+                page.update()
+
+        dob_picker = ft.DatePicker(
+            first_date=date(1900, 1, 1),
+            last_date=date.today(),
+            on_change=dob_change,
+        )
+        page.overlay.append(dob_picker)
+
+        def open_dob_picker(e):
+            dob_picker.open = True
+            page.update()
         address = ft.TextField(
             label="Address",
             width=320,
@@ -274,6 +319,11 @@ async def main(page: ft.Page):
                     password1,
                     password2,
                     dob,
+                    ft.TextButton(
+                        "Pick Date of Birth",
+                        style=ft.ButtonStyle(color=LINK_COLOR),
+                        on_click=open_dob_picker,
+                    ),
                     address,
                     phone,
                     ft.Text(
