@@ -850,7 +850,7 @@ async def main(page: ft.Page):
                                 ft.Divider(height=20),
                                 
                                 ft.Container(
-                                    content=ft.Text("Venue selection will be displayed here", size=16, color=ft.Colors.GREY_600),
+                                    content=ft.Text("Venues section", size=16, color=ft.Colors.GREY_600),
                                     padding=50
                                 ),
                                 
@@ -906,7 +906,7 @@ async def main(page: ft.Page):
                                 ft.Divider(height=20),
                                 
                                 ft.Container(
-                                    content=ft.Text("Customer reviews will be displayed here", size=16, color=ft.Colors.GREY_600),
+                                    content=ft.Text("Reviews section", size=16, color=ft.Colors.GREY_600),
                                     padding=50
                                 ),
                                 
