@@ -2,6 +2,7 @@ import os
 import flet as ft
 import httpx
 from datetime import date, datetime
+import asyncio
 
 
 PAGE_COLOR = "#CFD7E9"
@@ -67,10 +68,17 @@ async def main(page: ft.Page):
                     )
                     data = response.json()
 
+                    # if response.status_code == 200 and data.get("success") is True:
+                    #     status_text.value = ""
+                    #     await show_main_ui()
+                    #     return
                     if response.status_code == 200 and data.get("success") is True:
+                        print("Login response:", data)  # Debug: See what's returned
+                        page.data["token"] = data.get("token")
+                        print("Stored token:", page.data.get("token"))  # Debug: Verify storage
                         status_text.value = ""
-                        show_blank_page()
-                        return
+                        await show_main_ui()
+                        return                  
 
                     status_text.value = data.get("message", "Login failed.")
                 except Exception as ex:
@@ -574,13 +582,389 @@ async def main(page: ft.Page):
 
         return ft.Card(elevation=4, content=ft.Container(width=400, bgcolor="white", border_radius=12, content=ft.Column([
             ft.Stack([ft.Image(src=img_url, width=400, height=220, fit="cover"), ft.Container(ft.Text("Most Popular", size=10, weight="bold", color="white"), bgcolor=ft.Colors.ORANGE_700, padding=5, border_radius=5, right=10, top=10, visible=p.get("is_popular", False))]),
-            ft.Container(content=ft.Column([ft.Text(t, size=20, weight="bold"), ft.Text(p.get("description", "")[:120] + "...", size=13, color=ft.Colors.GREY_600), ft.Row([ft.Icon(ft.Icons.STAR, color="amber", size=16), ft.Text(f"{p.get('rating')} ({p.get('review_count')})", size=12, weight="bold", color="amber")]), ft.Text(f"Rs {float(p.get('price', 0)):,.2f}", size=22, weight="bold", color=PRIMARY_COLOR), ft.ElevatedButton("View More Details", bgcolor=PRIMARY_COLOR, color="white", width=float("inf"), on_click=lambda _: show_details_page())], spacing=10), padding=15)])))
+            ft.Container(content=ft.Column([ft.Text(t, size=20, weight="bold"), ft.Text(p.get("description", "")[:120] + "...", size=13, color=ft.Colors.GREY_600), ft.Row([ft.Icon(ft.Icons.STAR, color="amber", size=16), ft.Text(f"{p.get('rating')} ({p.get('review_count')})", size=12, weight="bold", color="amber")]), ft.Text(f"Rs {float(p.get('price', 0)):,.2f}", size=22, weight="bold", color=PRIMARY_COLOR), ft.ElevatedButton("View More Details", bgcolor=PRIMARY_COLOR, color="white", width=float("inf"), on_click=lambda _, pid=p.get("id"): show_details_page(pid))], spacing=10), padding=15)])))
 
-    def show_details_page():
+    def show_details_page(package_id=None):
         container = page.data.get("main_container")
+        if not container:
+            return
+        
+        
         container.controls.clear()
-        container.controls.append(ft.Container(ft.Column([ft.Text("Package Details", size=32, weight="bold", color=PRIMARY_COLOR), ft.TextButton("Back to Packages", icon=ft.Icons.ARROW_BACK, on_click=lambda _: show_packages_page())], spacing=20), padding=50))
+        
+        
+        loading = ft.Container(
+            content=ft.Column([
+                ft.ProgressRing(),
+                ft.Text("Loading package details...", size=16, color=PRIMARY_COLOR)
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            expand=True
+        )
+        container.controls.append(loading)
         page.update()
+        
+        async def display_package_details(package):
+            container.controls.clear()
+            
+            # Extract package data
+            title = package.get("title", "Untitled")
+            description = package.get("description", "No description available")
+            category = package.get("category", "Uncategorized")
+            price = float(package.get("price", 0))
+            rating = float(package.get("rating", 0))
+            guest_capacity = package.get("guest_capacity", 0)
+            is_popular = package.get("is_popular", False)
+            features = package.get("features", [])
+            
+            # Choose image based on category
+            category_images = {
+                "wedding": f"{BASE_URL}/static/banner_and_images/premium_wedding.jpeg",
+                "birthday": f"{BASE_URL}/static/banner_and_images/birthday.jpeg",
+                "corporate": f"{BASE_URL}/static/banner_and_images/corporate.jpeg",
+                "graduation": f"{BASE_URL}/static/banner_and_images/graduation.jpeg",
+                "social": f"{BASE_URL}/static/banner_and_images/social_event.jpeg"
+            }
+            image_url = category_images.get(category, f"{BASE_URL}/static/banner_and_images/product_default.jpg")
+            
+            # Build the details UI
+            details_content = ft.Column(
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+                controls=[
+                    # Hero Image
+                    ft.Container(
+                        content=ft.Image(src=image_url, width=float("inf"), height=300, fit="cover"),
+                        bgcolor=ft.Colors.GREY_200,
+                    ),
+                    
+                    # Main Content Container
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                # Back button and title
+                                ft.Row(
+                                    [
+                                        ft.IconButton(
+                                            icon=ft.Icons.ARROW_BACK,
+                                            icon_size=28,
+                                            on_click=lambda _: asyncio.create_task(show_packages_page()),
+                                            tooltip="Back to packages"
+                                        ),
+                                        ft.Text("Package Details", size=28, weight=ft.FontWeight.BOLD, color=PRIMARY_COLOR, expand=True),
+                                        ft.Container(width=40)
+                                    ]
+                                ),
+                                
+                                
+                                # Category and Rating Row
+                                ft.Row(
+                                    [
+                                        ft.Container(
+                                            content=ft.Text(category.upper(), size=14, weight=ft.FontWeight.W_500, color=PRIMARY_COLOR),
+                                            bgcolor=ft.Colors.GREY_100,
+                                            padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                                            border_radius=15
+                                        ),
+                                        ft.Row(
+                                            [
+                                                ft.Icon(ft.Icons.STAR, color=ft.Colors.AMBER, size=18),
+                                                ft.Text(f"{rating}", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK),
+                                               
+                                            ],
+                                            spacing=5
+                                        )
+                                    ],
+                                    spacing=10
+                                ),
+                                ft.Row(
+                                    [
+                                        ft.Icon(ft.Icons.INVENTORY, size=24, color=PRIMARY_COLOR),
+                                        ft.Text(package.get("title", "Package"), size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK)
+                                    ],
+                                    spacing=10
+                                ),
+                                ft.Divider(height=20),
+                                
+                                # Price and Capacity Cards
+                                ft.Row(
+                                    [
+                                        ft.Card(
+                                            content=ft.Container(
+                                                content=ft.Column(
+                                                    [
+                                                        ft.Row(
+                                                            [
+                                                                ft.Icon(ft.Icons.ATTACH_MONEY, size=16, color=ft.Colors.GREY_600),
+                                                                ft.Text("Price", size=14, color=ft.Colors.GREY_600)
+                                                            ],
+                                                            spacing=5
+                                                        ),
+                                                        ft.Text(f"Rs {price:,.2f}", size=28, weight=ft.FontWeight.BOLD, color=PRIMARY_COLOR)
+                                                    ],
+                                                    spacing=5,
+                                                    horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                                                ),
+                                                padding=20,
+                                                bgcolor = ft.Colors.WHITE,
+                                            ),
+                                            elevation=2,
+                                            expand=True
+                                        ),
+                                        ft.Card(
+                                            content=ft.Container(
+                                                content=ft.Column(
+                                                    [
+                                                        ft.Row(
+                                                            [
+                                                                ft.Icon(ft.Icons.GROUP, size=16, color=ft.Colors.GREY_600),
+                                                                ft.Text("Guest Capacity", size=14, color=ft.Colors.GREY_600)
+                                                            ],
+                                                            spacing=5
+                                                        ),
+                                                        ft.Text(f"Up to {guest_capacity}", size=28, weight=ft.FontWeight.BOLD, color=PRIMARY_COLOR)
+                                                    ],
+                                                    spacing=5,
+                                                    horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                                                ),
+                                                padding=20,
+                                                bgcolor = ft.Colors.WHITE,
+                                            ),
+                                            elevation=2,
+                                            expand=True
+                                        )
+                                    ],
+                                    spacing=20
+                                ),
+                                
+                                ft.Divider(height=20),
+                                
+                                # Description Section
+                                ft.Row(
+                                    [
+                                        ft.Icon(ft.Icons.DESCRIPTION, size=24, color=PRIMARY_COLOR),
+                                        ft.Text("Description", size=22, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK87)
+                                    ],
+                                    spacing=10
+                                ),
+                                ft.Text(description, size=16, color=ft.Colors.GREY_800),
+                                
+                                # Features Section
+                                ft.Row(
+                                    [
+                                        ft.Icon(ft.Icons.STAR, size=24, color=PRIMARY_COLOR),
+                                        ft.Text("Package Features", size=22, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK)
+                                    ],
+                                    spacing=10
+                                ),
+                                ft.Column(
+                                    [
+                                        ft.Row(
+                                            [
+                                                ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN, size=22),
+                                                ft.Text(feature.get("feature", ""), size=15, expand=True,color=ft.Colors.BLACK87)
+                                            ],
+                                            spacing=10
+                                        ) for feature in features
+                                    ]
+                                ) if features else ft.Text("No features listed", size=15, color=ft.Colors.GREY_600),
+                                
+                                ft.Divider(height=30),
+                                
+                                
+                                ft.Row(
+                                    [
+                                    ft.ElevatedButton(
+                                        "View Venues",
+                                        icon=ft.Icons.LOCATION_ON,
+                                        bgcolor=PRIMARY_COLOR,
+                                        color="white",
+                                        width=180,
+                                        height=45,
+                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+                                        on_click=lambda _, pid=package.get("id"): asyncio.create_task(show_venues_page(pid))
+                                    ),
+                                    ft.ElevatedButton(
+                                        "View Reviews",
+                                        icon=ft.Icons.RATE_REVIEW,
+                                        bgcolor=PRIMARY_COLOR,
+                                        color="white",
+                                        width=180,
+                                        height=45,
+                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+                                        on_click=lambda _, pid=package.get("id"): asyncio.create_task(show_reviews_page(pid))
+                                    )
+                                    ],
+                                    alignment=ft.MainAxisAlignment.CENTER,
+                                    spacing=20
+                                ),
+                                
+                                ft.Container(height=20)
+                            ],
+                            spacing=15
+                        ),
+                        padding=ft.padding.all(25),
+                        bgcolor=ft.Colors.WHITE,
+                        margin=ft.margin.only(top=-30)
+                    )
+                ]
+            )
+            
+            container.controls.append(details_content)
+            page.update()
+
+        async def show_venues_page(package_id):
+            container = page.data.get("main_container")
+            if not container:
+                return
+            
+            container.controls.clear()
+            
+            # Create venues page content
+            venues_content = ft.Column(
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+                controls=[
+                    
+                    ft.Container(
+                        content=ft.Image(src=f"{BASE_URL}/static/banner_and_images/venues_banner.jpg", width=float("inf"), height=200, fit="cover"),
+                        bgcolor=ft.Colors.GREY_200,
+                    ),
+                    
+                    # Main Content Container
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                # Back button and title
+                                ft.Row(
+                                    [
+                                    ft.IconButton(
+                                        icon=ft.Icons.ARROW_BACK,
+                                        icon_size=28,
+                                        on_click=lambda _, pid=package_id: show_details_page(pid),
+                                        tooltip="Back to package details"
+                                    ),
+                                        ft.Text("Venues", size=32, weight=ft.FontWeight.BOLD, color=PRIMARY_COLOR, expand=True),
+                                    ]
+                                ),
+                                
+                                ft.Divider(height=20),
+                                
+                                ft.Container(
+                                    content=ft.Text("Venue selection will be displayed here", size=16, color=ft.Colors.GREY_600),
+                                    padding=50
+                                ),
+                                
+                                ft.Container(height=20)
+                            ],
+                            spacing=15
+                        ),
+                        padding=ft.padding.all(25),
+                        bgcolor=ft.Colors.WHITE,
+                        margin=ft.margin.only(top=-30)
+                    )
+                ]
+            )
+            
+            container.controls.append(venues_content)
+            page.update()
+        
+        async def show_reviews_page(package_id):
+            container = page.data.get("main_container")
+            if not container:
+                return
+            
+            container.controls.clear()
+            
+            # Create reviews page content
+            reviews_content = ft.Column(
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+                controls=[
+                    
+                    ft.Container(
+                        content=ft.Image(src=f"{BASE_URL}/static/banner_and_images/reviews_banner.jpg", width=float("inf"), height=200, fit="cover"),
+                        bgcolor=ft.Colors.GREY_200,
+                    ),
+                    
+                    #
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                # Back button and title
+                                ft.Row(
+                                    [
+                                        ft.IconButton(
+                                            icon=ft.Icons.ARROW_BACK,
+                                            icon_size=28,
+                                            on_click=lambda _, pid=package_id: show_details_page(pid),
+                                            tooltip="Back to package details"
+                                        ),
+                                        ft.Text("Reviews", size=32, weight=ft.FontWeight.BOLD, color=PRIMARY_COLOR, expand=True),
+                                    ]
+                                ),
+                                
+                                ft.Divider(height=20),
+                                
+                                ft.Container(
+                                    content=ft.Text("Customer reviews will be displayed here", size=16, color=ft.Colors.GREY_600),
+                                    padding=50
+                                ),
+                                
+                                ft.Container(height=20)
+                            ],
+                            spacing=15
+                        ),
+                        padding=ft.padding.all(25),
+                        bgcolor=ft.Colors.WHITE,
+                        margin=ft.margin.only(top=-30)
+                    )
+                ]
+            )
+            
+            container.controls.append(reviews_content)
+            page.update()
+        # Fetch package details asynchronously
+        async def fetch_details():
+            async with httpx.AsyncClient() as client:
+                try:
+                    response = await client.get(
+                        f"{BASE_URL}/api/event-packages/{package_id}/",
+                        headers={"Authorization": f"Token {page.data['token']}"}
+                    )
+                    
+                    if response.status_code == 200:
+                        package = response.json()
+                        await display_package_details(package)
+                    else:
+                        container.controls.clear()
+                        container.controls.append(
+                            ft.Container(
+                                content=ft.Column([
+                                    ft.Icon(ft.Icons.ERROR_OUTLINE, size=80, color=ft.Colors.RED_400),
+                                    ft.Text(f"Error {response.status_code}: Failed to load package details", 
+                                            size=18, color=ft.Colors.RED_700),
+                                    ft.ElevatedButton("Go Back", on_click=lambda _: asyncio.create_task(show_packages_page()))
+                                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                                expand=True
+                            )
+                        )
+                    page.update()
+                    
+                except Exception as e:
+                    container.controls.clear()
+                    container.controls.append(
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Icon(ft.Icons.ERROR_OUTLINE, size=80, color=ft.Colors.RED_400),
+                                ft.Text(f"Error: {str(e)}", size=18, color=ft.Colors.RED_700),
+                                ft.ElevatedButton("Go Back", on_click=lambda _: asyncio.create_task(show_packages_page()))
+                            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                            expand=True
+                        )
+                    )
+                    page.update()
+        
+        asyncio.create_task(fetch_details())
 
     show_login_page()
 
