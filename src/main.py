@@ -69,8 +69,7 @@ async def main(page: ft.Page):
 
                     if response.status_code == 200 and data.get("success") is True:
                         status_text.value = ""
-                        page.data["token"] = data.get("token")
-                        await show_main_ui()
+                        show_blank_page()
                         return
 
                     status_text.value = data.get("message", "Login failed.")
