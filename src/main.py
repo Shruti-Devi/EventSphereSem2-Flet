@@ -15,6 +15,7 @@ LABEL_COLOR = "#576983"
 INPUT_BORDER = "#DDDDDD"
 BASE_URL = os.getenv("EVENTSPHERE_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
+
 async def show_reviews_page(page: ft.Page, package_id: int, on_back=None):
     """Fetch and display reviews. on_back should be your show_details_page function."""
     
