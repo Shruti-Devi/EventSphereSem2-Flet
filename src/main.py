@@ -1,6 +1,8 @@
 import os
 import flet as ft
 import httpx
+import requests
+from requests.exceptions import RequestException
 from datetime import date, datetime
 import asyncio
 
@@ -13,6 +15,156 @@ LABEL_COLOR = "#576983"
 INPUT_BORDER = "#DDDDDD"
 BASE_URL = os.getenv("EVENTSPHERE_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
+async def show_reviews_page(page: ft.Page, package_id: int, on_back=None):
+    """Fetch and display reviews. on_back should be your show_details_page function."""
+    
+    
+    container = page.data.get("main_container")
+    if not container:
+        print("Container not found!")
+        return
+    
+    # Show loading state
+    container.controls.clear()
+    container.controls.append(
+        ft.Container(
+            content=ft.Column([
+                ft.ProgressRing(),
+                ft.Text("Loading reviews...", size=16, color=PRIMARY_COLOR)
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            expand=True
+        )
+    )
+    page.update()
+    
+    try:
+        
+        headers = {"Content-Type": "application/json"}
+        token = page.data.get("token")
+        if token:
+            headers["Authorization"] = f"Token {token}"
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"http://127.0.0.1:8000/api/testimonials/by-package/{package_id}/",
+                headers=headers,
+                timeout=5.0,
+            )
+        
+        if response.status_code != 200:
+            container.controls.clear()
+            container.controls.append(
+                ft.Container(
+                    content=ft.Column([
+                        ft.Icon(ft.Icons.ERROR_OUTLINE, size=80, color=ft.Colors.RED_400),
+                        ft.Text(f"Error {response.status_code}: Failed to load reviews", size=18, color=ft.Colors.RED_700),
+                        ft.Button("Go Back", on_click=lambda _: on_back(package_id) if on_back else None)
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    expand=True
+                )
+            )
+            page.update()
+            return
+        
+        reviews = response.json()
+
+        
+        reviews_content = ft.Column(
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+            controls=[
+                ft.Container(
+                    content=ft.Image(src=f"{BASE_URL}/static/banner_and_images/reviews_banner.jpg", width=float("inf"), height=200, fit="cover"),
+                    bgcolor=ft.Colors.GREY_200,
+                ),
+                ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.IconButton(
+                                icon=ft.Icons.ARROW_BACK,
+                                icon_size=28,
+                                on_click=lambda _: on_back(package_id) if on_back else None,
+                                tooltip="Back to package details"
+                            ),
+                            ft.Text("Reviews", size=32, weight=ft.FontWeight.BOLD, color=PRIMARY_COLOR, expand=True),
+                        ]),
+                        ft.Divider(height=20),
+                        # ... [rest of your review cards/empty state code stays exactly the same] ...
+                        *([
+                            ft.Card(
+                                elevation=3,
+                                content=ft.Container(
+                                    padding=20,
+                                    margin=ft.Margin.only(bottom=15),
+                                    content=ft.Row([
+                                        ft.CircleAvatar(
+                                            foreground_image_src=r.get("reviewer_photo") if r.get("reviewer_photo") else None,
+                                            content=ft.Icon(ft.Icons.PERSON, size=30, color=ft.Colors.WHITE) if not r.get("reviewer_photo") else None,
+                                            bgcolor=ft.Colors.GREY_300 if not r.get("reviewer_photo") else None,
+                                            radius=35,
+                                        ),
+                                        ft.Column([
+                                            ft.Text(r.get("reviewer_name", "Anonymous"), weight=ft.FontWeight.BOLD, size=18),
+                                            ft.Row([ft.Icon(ft.Icons.STAR, color=ft.Colors.AMBER, size=20) for _ in range(int(float(r.get("rating", 0))))], spacing=2),
+                                            ft.Text(r.get("review_text", ""), size=15, italic=True, color=ft.Colors.GREY_800),
+                                            ft.Text(f"Date: {r.get('date', 'Unknown')}", size=12, color=ft.Colors.GREY_600)
+                                        ], spacing=8, expand=True)
+                                    ], spacing=15)
+                                ),
+                            )
+                            for r in reviews
+                        ] if reviews else [
+                            ft.Container(
+                                content=ft.Column([
+                                    ft.Icon(ft.Icons.INFO_OUTLINE, size=80, color=ft.Colors.GREY_400),
+                                    ft.Text("No reviews yet!", size=22, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_700),
+                                    ft.Text("Be the first to share your experience.", size=16, color=ft.Colors.GREY_500)
+                                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15),
+                                padding=ft.Padding.all(60)
+                            )
+                        ]),
+                        ft.Container(height=30)
+                    ], spacing=15),
+                    padding=ft.Padding.all(25),
+                    bgcolor=ft.Colors.WHITE,
+                    margin=ft.Margin.only(top=-30)
+                )
+            ]
+        )
+        
+        container.controls.clear()
+        container.controls.append(reviews_content)
+        page.update()
+
+        
+    except httpx.RequestError as e:
+        print(f"Network Error: {e}")
+        container.controls.clear()
+        container.controls.append(
+            ft.Container(
+                content=ft.Column([
+                    ft.Icon(ft.Icons.ERROR_OUTLINE, size=80, color=ft.Colors.RED_400),
+                    ft.Text(f"Network Error: {e}", size=18, color=ft.Colors.RED_700),
+                    ft.Button("Go Back", on_click=lambda _: on_back(package_id) if on_back else None)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                expand=True
+            )
+        )
+        page.update()
+    except Exception as e:
+        print(f"Unexpected Error: {e}")
+        container.controls.clear()
+        container.controls.append(
+            ft.Container(
+                content=ft.Column([
+                    ft.Icon(ft.Icons.ERROR_OUTLINE, size=80, color=ft.Colors.RED_400),
+                    ft.Text(f"Error: {e}", size=18, color=ft.Colors.RED_700),
+                    ft.Button("Go Back", on_click=lambda _: on_back(package_id) if on_back else None)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                expand=True
+            )
+        )
+        page.update()
 
 async def main(page: ft.Page):
     if not hasattr(page, "data") or page.data is None:
@@ -48,10 +200,10 @@ async def main(page: ft.Page):
         status_text = ft.Text("", color=ft.Colors.RED_700, text_align=ft.TextAlign.CENTER)
 
         async def login_click(e):
+            status_text.value = ""
             if email_input.value == "" or password_input.value == "":
                 status_text.value = "Enter your email and password."
-            page.update()
-            if status_text.value != "":
+                page.update()
                 return
 
             status_text.value = "Logging in..."
@@ -626,6 +778,7 @@ async def main(page: ft.Page):
             }
             image_url = category_images.get(category, f"{BASE_URL}/static/banner_and_images/product_default.jpg")
             
+
             # Build the details UI
             details_content = ft.Column(
                 scroll=ft.ScrollMode.AUTO,
@@ -783,7 +936,7 @@ async def main(page: ft.Page):
                                         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
                                         on_click=lambda _, pid=package.get("id"): asyncio.create_task(show_venues_page(pid))
                                     ),
-                                    ft.ElevatedButton(
+                                    ft.Button(
                                         "View Reviews",
                                         icon=ft.Icons.RATE_REVIEW,
                                         bgcolor=PRIMARY_COLOR,
@@ -791,7 +944,9 @@ async def main(page: ft.Page):
                                         width=180,
                                         height=45,
                                         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
-                                        on_click=lambda _, pid=package.get("id"): asyncio.create_task(show_reviews_page(pid))
+                                        on_click=lambda e, pid=package.get("id"): asyncio.create_task(
+                                            show_reviews_page(page, pid, on_back=show_details_page)
+                                        )
                                     )
                                     ],
                                     alignment=ft.MainAxisAlignment.CENTER,
@@ -868,62 +1023,7 @@ async def main(page: ft.Page):
             container.controls.append(venues_content)
             page.update()
         
-        async def show_reviews_page(package_id):
-            container = page.data.get("main_container")
-            if not container:
-                return
-            
-            container.controls.clear()
-            
-            # Create reviews page content
-            reviews_content = ft.Column(
-                scroll=ft.ScrollMode.AUTO,
-                expand=True,
-                controls=[
-                    
-                    ft.Container(
-                        content=ft.Image(src=f"{BASE_URL}/static/banner_and_images/reviews_banner.jpg", width=float("inf"), height=200, fit="cover"),
-                        bgcolor=ft.Colors.GREY_200,
-                    ),
-                    
-                    #
-                    ft.Container(
-                        content=ft.Column(
-                            [
-                                # Back button and title
-                                ft.Row(
-                                    [
-                                        ft.IconButton(
-                                            icon=ft.Icons.ARROW_BACK,
-                                            icon_size=28,
-                                            on_click=lambda _, pid=package_id: show_details_page(pid),
-                                            tooltip="Back to package details"
-                                        ),
-                                        ft.Text("Reviews", size=32, weight=ft.FontWeight.BOLD, color=PRIMARY_COLOR, expand=True),
-                                    ]
-                                ),
-                                
-                                ft.Divider(height=20),
-                                
-                                ft.Container(
-                                    content=ft.Text("Reviews section", size=16, color=ft.Colors.GREY_600),
-                                    padding=50
-                                ),
-                                
-                                ft.Container(height=20)
-                            ],
-                            spacing=15
-                        ),
-                        padding=ft.padding.all(25),
-                        bgcolor=ft.Colors.WHITE,
-                        margin=ft.margin.only(top=-30)
-                    )
-                ]
-            )
-            
-            container.controls.append(reviews_content)
-            page.update()
-        # Fetch package details asynchronously
+        
         async def fetch_details():
             async with httpx.AsyncClient() as client:
                 try:
