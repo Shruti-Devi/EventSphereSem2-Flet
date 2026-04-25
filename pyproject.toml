@@ -9,6 +9,8 @@ authors = [
 ]
 dependencies = [
     "flet>=0.82.0",
+    "flet-map>=0.1.0",
+    "flet-geolocator>=0.1.0",
     "httpx>=0.28.0"
 ]
 
