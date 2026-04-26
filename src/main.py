@@ -1551,13 +1551,6 @@ async def main(page: ft.Page):
                                             "Show venues only",
                                             on_click=lambda e: asyncio.create_task(_load_venues_and_map(False)),
                                         ),
-                                        ft.OutlinedButton(
-                                            "Clear selection",
-                                            on_click=lambda e: (
-                                                selected_pos_state.__setitem__("pos", None),
-                                                asyncio.create_task(_load_venues_and_map(False)),
-                                            ),
-                                        ),
                                     ],
                                     spacing=10,
                                     wrap=True,
