@@ -708,9 +708,6 @@ async def main(page: ft.Page):
             for p in filtered: package_grid.controls.append(build_package_card(p))
             page.update()
 
-        cat_drop.on_change = update_grid
-        prc_drop.on_change = update_grid
-        srt_drop.on_change = update_grid
         search_f.on_change = update_grid
 
         apply_btn = ft.ElevatedButton("Apply Filters", on_click=update_grid, bgcolor=PRIMARY_COLOR, color="white")
