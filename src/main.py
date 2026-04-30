@@ -842,103 +842,103 @@ async def main(page: ft.Page):
                     except Exception:
                         venue_ids = venue_ids
 
-                if not venue_ids:
-                    map_status.value = "No venues found for this package."
-                    map_holder.content = ft.Container(
-                        content=ft.Text("No venues to display on map.", color=ft.Colors.GREY_700),
-                        alignment=ft.Alignment(0, 0),
-                    )
-                    page.update()
-                    return
-
-                try:
-                    async with httpx.AsyncClient() as client:
-                        venues_res = await client.get(
-                            f"{BASE_URL}/api/venues/",
-                            headers=headers,
-                            timeout=8.0,
-                        )
-
-                    if venues_res.status_code != 200:
-                        map_status.value = f"Failed to load venues (Status: {venues_res.status_code})"
+                    if not venue_ids:
+                        map_status.value = "No venues found for this package."
                         map_holder.content = ft.Container(
-                            content=ft.Text("Failed to load venue data.", color=ft.Colors.RED_700),
+                            content=ft.Text("No venues to display on map.", color=ft.Colors.GREY_700),
                             alignment=ft.Alignment(0, 0),
                         )
                         page.update()
                         return
 
-                    venues_data = venues_res.json()
-                    if isinstance(venues_data, dict):
-                        venues_data = venues_data.get("results", [])
-
-                    venue_id_set = set(int(v) for v in venue_ids if str(v).isdigit())
-                    venues_for_package = [
-                        v for v in venues_data
-                        if int(v.get("id", -1)) in venue_id_set
-                    ]
-
-                    venues_with_coords = []
-                    for v in venues_for_package:
-                        lat = v.get("latitude")
-                        lng = v.get("longitude")
-                        if lat is None or lng is None:
-                            continue
-                        try:
-                            venues_with_coords.append(
-                                {
-                                    "id": v.get("id"),
-                                    "name": v.get("name", "Venue"),
-                                    "location": v.get("location", ""),
-                                    "latitude": float(lat),
-                                    "longitude": float(lng),
-                                }
+                    try:
+                        async with httpx.AsyncClient() as client:
+                            venues_res = await client.get(
+                                f"{BASE_URL}/api/venues/",
+                                headers=headers,
+                                timeout=8.0,
                             )
-                        except Exception:
-                            continue
 
-                    if not venues_with_coords:
-                        map_status.value = "Venues loaded, but no coordinates available yet."
+                        if venues_res.status_code != 200:
+                            map_status.value = f"Failed to load venues (Status: {venues_res.status_code})"
+                            map_holder.content = ft.Container(
+                                content=ft.Text("Failed to load venue data.", color=ft.Colors.RED_700),
+                                alignment=ft.Alignment(0, 0),
+                            )
+                            page.update()
+                            return
+
+                        venues_data = venues_res.json()
+                        if isinstance(venues_data, dict):
+                            venues_data = venues_data.get("results", [])
+
+                        venue_id_set = set(int(v) for v in venue_ids if str(v).isdigit())
+                        venues_for_package = [
+                            v for v in venues_data
+                            if int(v.get("id", -1)) in venue_id_set
+                        ]
+
+                        venues_with_coords = []
+                        for v in venues_for_package:
+                            lat = v.get("latitude")
+                            lng = v.get("longitude")
+                            if lat is None or lng is None:
+                                continue
+                            try:
+                                venues_with_coords.append(
+                                    {
+                                        "id": v.get("id"),
+                                        "name": v.get("name", "Venue"),
+                                        "location": v.get("location", ""),
+                                        "latitude": float(lat),
+                                        "longitude": float(lng),
+                                    }
+                                )
+                            except Exception:
+                                continue
+
+                        if not venues_with_coords:
+                            map_status.value = "Venues loaded, but no coordinates available yet."
+                            map_holder.content = ft.Container(
+                                content=ft.Text("No venue coordinates available.", color=ft.Colors.GREY_700),
+                                alignment=ft.Alignment(0, 0),
+                            )
+                            page.update()
+                            return
+
+                        center_lat = sum(v["latitude"] for v in venues_with_coords) / len(venues_with_coords)
+                        center_lng = sum(v["longitude"] for v in venues_with_coords) / len(venues_with_coords)
+
+                        markers = []
+                        for v in venues_with_coords:
+                            markers.append(
+                                ftm.Marker(
+                                    coordinates=ftm.MapLatitudeLongitude(v["latitude"], v["longitude"]),
+                                    width=36,
+                                    height=36,
+                                    tooltip=f"{v.get('name', 'Venue')} {('- ' + v.get('location')) if v.get('location') else ''}".strip(),
+                                    content=ft.Icon(ft.Icons.LOCATION_ON, size=36, color=ft.Colors.RED_600),
+                                )
+                            )
+
+                        map_status.value = f"Showing {len(markers)} venue location(s)."
+                        map_holder.content = ftm.Map(
+                            height=280,
+                            initial_center=ftm.MapLatitudeLongitude(center_lat, center_lng),
+                            initial_zoom=11,
+                            layers=[
+                                ftm.TileLayer(url_template="https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png"),
+                                ftm.MarkerLayer(markers=markers),
+                            ],
+                        )
+                        page.update()
+                    except Exception as ex:
+                        map_status.value = f"Map error: {ex}"
                         map_holder.content = ft.Container(
-                            content=ft.Text("No venue coordinates available.", color=ft.Colors.GREY_700),
+                            content=ft.Text("Unable to display map.", color=ft.Colors.RED_700),
                             alignment=ft.Alignment(0, 0),
                         )
                         page.update()
-                        return
-
-                    center_lat = sum(v["latitude"] for v in venues_with_coords) / len(venues_with_coords)
-                    center_lng = sum(v["longitude"] for v in venues_with_coords) / len(venues_with_coords)
-
-                    markers = []
-                    for v in venues_with_coords:
-                        markers.append(
-                            ftm.Marker(
-                                coordinates=ftm.MapLatitudeLongitude(v["latitude"], v["longitude"]),
-                                width=36,
-                                height=36,
-                                tooltip=f"{v.get('name', 'Venue')} {('- ' + v.get('location')) if v.get('location') else ''}".strip(),
-                                content=ft.Icon(ft.Icons.LOCATION_ON, size=36, color=ft.Colors.RED_600),
-                            )
-                        )
-
-                    map_status.value = f"Showing {len(markers)} venue location(s)."
-                    map_holder.content = ftm.Map(
-                        height=280,
-                        initial_center=ftm.MapLatitudeLongitude(center_lat, center_lng),
-                        initial_zoom=11,
-                        layers=[
-                            ftm.TileLayer(url_template="https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png"),
-                            ftm.MarkerLayer(markers=markers),
-                        ],
-                    )
-                    page.update()
-                except Exception as ex:
-                    map_status.value = f"Map error: {ex}"
-                    map_holder.content = ft.Container(
-                        content=ft.Text("Unable to display map.", color=ft.Colors.RED_700),
-                        alignment=ft.Alignment(0, 0),
-                    )
-                    page.update()
 
             # Build the details UI
             details_content = ft.Column(
@@ -1161,6 +1161,16 @@ async def main(page: ft.Page):
             user_location_text = ft.Text("", size=13, color=ft.Colors.GREY_700)
             selected_location_text = ft.Text("Tip: tap the map to select a location.", size=13, color=ft.Colors.GREY_700)
             selected_pos_state = {"pos": None}
+            render_fn = None
+
+            def _clear_map_selection(_=None):
+                selected_pos_state["pos"] = None
+                selected_location_text.value = "Tip: tap the map to select a location."
+                if render_fn is not None:
+                    render_fn()
+                else:
+                    page.update()
+
             venues_map_holder = ft.Container(
                 height=320,
                 border_radius=12,
@@ -1177,7 +1187,7 @@ async def main(page: ft.Page):
                 ),
             )
 
-            async def _load_venues_and_map(use_geolocation: bool = True):
+            async def _load_venues_and_map(use_geolocation: bool = True, use_ip_location: bool = False):
                 headers = {"Content-Type": "application/json"}
                 token = page.data.get("token")
                 if token:
@@ -1206,8 +1216,8 @@ async def main(page: ft.Page):
 
                     venue_ids = [
                         vo.get("venue")
-                        for vo in vo_data
-                        if vo.get("package") == package_id and vo.get("venue") is not None
+                        for vo in (vo_data or [])
+                        if str(vo.get("package")) == str(package_id) and vo.get("venue") is not None
                     ]
                     venue_id_set = set(int(v) for v in venue_ids if str(v).isdigit())
 
@@ -1241,9 +1251,18 @@ async def main(page: ft.Page):
                         venues_data = venues_data.get("results", [])
 
                     venues_for_package = [
-                        v for v in venues_data
-                        if int(v.get("id", -1)) in venue_id_set
+                        v
+                        for v in (venues_data or [])
+                        if str(v.get("id", "")).isdigit() and int(v.get("id")) in venue_id_set
                     ]
+                    if not venues_for_package:
+                        venues_status.value = "No venues to display."
+                        venues_map_holder.content = ft.Container(
+                            content=ft.Text("No venues to display on map.", color=ft.Colors.GREY_700),
+                            alignment=ft.Alignment(0, 0),
+                        )
+                        page.update()
+                        return
 
                     def _render_venue_list(venues, distances_by_id=None):
                         venues_list.controls.clear()
@@ -1311,38 +1330,65 @@ async def main(page: ft.Page):
 
                     user_pos = None
                     nearest_card.content = None
-                    if not use_geolocation:
-                        user_location_text.value = ""
-                    if use_geolocation and ftg is not None:
+                    user_location_text.value = ""
+
+                    async def _get_ip_position():
                         try:
+                            async with httpx.AsyncClient() as client:
+                                res = await client.get("https://ipapi.co/json/", timeout=5.0)
+                            if res.status_code != 200:
+                                return None
+                            data = res.json() or {}
+                            lat = data.get("latitude") or data.get("lat")
+                            lng = data.get("longitude") or data.get("lon")
+                            if lat is None or lng is None:
+                                return None
+                            return (float(lat), float(lng))
+                        except Exception:
+                            return None
+
+                    if use_ip_location:
+                        user_pos = await _get_ip_position()
+                        if user_pos:
+                            user_location_text.value = f"IP location: {user_pos[0]:.5f}, {user_pos[1]:.5f}"
+                        else:
+                            user_location_text.value = "IP location not available. Tap the map."
+                    elif use_geolocation:
+                        try:
+                            if ftg is None:
+                                raise RuntimeError("geolocator not installed")
+
                             geo = page.data.get("geolocator")
                             if geo is None:
                                 geo = ftg.Geolocator(
                                     configuration=ftg.GeolocatorConfiguration(
-                                        accuracy=ftg.GeolocatorPositionAccuracy.LOW
+                                        accuracy=ftg.GeolocatorPositionAccuracy.MEDIUM
                                     ),
                                     on_position_change=lambda e: None,
                                     on_error=lambda e: None,
                                 )
                                 page.data["geolocator"] = geo
 
-                            perm = await geo.request_permission()
-                            perm_s = str(perm).lower()
-                            if "denied" in perm_s or "restricted" in perm_s:
-                                user_location_text.value = "Location permission denied. Showing venues only."
-                            else:
+                            await geo.request_permission()
+                            try:
                                 p = await geo.get_current_position()
-                                user_pos = (float(p.latitude), float(p.longitude))
-                                user_location_text.value = f"Your location: {user_pos[0]:.5f}, {user_pos[1]:.5f}"
-                        except Exception as ex:
-                            user_location_text.value = f"Geolocation unavailable: {ex}"
-                    elif use_geolocation and ftg is None:
-                        user_location_text.value = "Geolocation not installed. Add dependency: flet-geolocator"
+                            except Exception:
+                                p = await geo.get_last_known_position()
+
+                            if p is None:
+                                raise RuntimeError("no position")
+
+                            user_pos = (float(p.latitude), float(p.longitude))
+                            user_location_text.value = f"My location: {user_pos[0]:.5f}, {user_pos[1]:.5f}"
+                        except Exception:
+                            user_pos = await _get_ip_position()
+                            if user_pos:
+                                user_location_text.value = f"IP location: {user_pos[0]:.5f}, {user_pos[1]:.5f}"
+                            else:
+                                user_location_text.value = "Location not available. Tap the map."
 
                     center_lat = sum(v["latitude"] for v in venues_with_coords) / len(venues_with_coords)
                     center_lng = sum(v["longitude"] for v in venues_with_coords) / len(venues_with_coords)
-
-                    render_state = {"fn": None}
 
                     def _render_for_reference():
                         reference_pos = selected_pos_state.get("pos") or user_pos
@@ -1419,10 +1465,10 @@ async def main(page: ft.Page):
                             marker_size = 36
                             if vid != -1 and reference_pos is not None and distances_by_id:
                                 if vid == nearest_vid:
-                                    marker_color = LINK_COLOR
+                                    marker_color = ft.Colors.GREEN_700
                                     marker_size = 40
                                 elif vid in highlight_ids:
-                                    marker_color = PRIMARY_COLOR
+                                    marker_color = ft.Colors.GREEN_500
                                     marker_size = 38
                             markers.append(
                                 ftm.Marker(
@@ -1434,16 +1480,16 @@ async def main(page: ft.Page):
                                 )
                             )
 
-                        if user_pos is not None:
-                            markers.append(
-                                ftm.Marker(
-                                    coordinates=ftm.MapLatitudeLongitude(user_pos[0], user_pos[1]),
-                                    width=30,
-                                    height=30,
-                                    tooltip="You are here",
-                                    content=ft.Icon(ft.Icons.MY_LOCATION, size=30, color=PRIMARY_COLOR),
+                            if user_pos is not None:
+                                markers.append(
+                                    ftm.Marker(
+                                        coordinates=ftm.MapLatitudeLongitude(user_pos[0], user_pos[1]),
+                                        width=30,
+                                        height=30,
+                                        tooltip="You are here",
+                                        content=ft.Icon(ft.Icons.MY_LOCATION, size=30, color=ft.Colors.GREEN_700),
+                                    )
                                 )
-                            )
 
                         if using_selected and reference_pos is not None:
                             markers.append(
@@ -1463,15 +1509,18 @@ async def main(page: ft.Page):
                         )
 
                         venues_status.value = (
-                            f"Showing {len(venues_for_package)} venue(s) and {len(markers)} marker(s). "
-                            f"{'Nearest venues are highlighted.' if reference_pos is not None else ''}"
+                            f"Showing {len(venues_for_package)} venue(s). "
+                            f"{'Nearest venues are highlighted in green.' if reference_pos is not None else ''}"
                         ).strip()
                         venues_map_holder.content = ftm.Map(
                             height=320,
                             initial_center=ftm.MapLatitudeLongitude(map_center[0], map_center[1]),
                             initial_zoom=12 if reference_pos is not None else 11,
                             layers=[
-                                ftm.TileLayer(url_template="https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png"),
+                                ftm.TileLayer(
+                                    url_template="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+                                    subdomains=["a", "b", "c", "d"],
+                                ),
                                 ftm.MarkerLayer(markers=markers),
                             ],
                             on_tap=handle_map_tap,
@@ -1481,10 +1530,11 @@ async def main(page: ft.Page):
                     def handle_map_tap(e: ftm.MapTapEvent):
                         if getattr(e, "coordinates", None) is not None:
                             selected_pos_state["pos"] = (e.coordinates.latitude, e.coordinates.longitude)
-                            if render_state["fn"] is not None:
-                                render_state["fn"]()
+                            if render_fn is not None:
+                                render_fn()
 
-                    render_state["fn"] = _render_for_reference
+                    nonlocal render_fn
+                    render_fn = _render_for_reference
                     _render_for_reference()
                 except Exception as ex:
                     venues_status.value = f"Venues/map error: {ex}"
@@ -1541,12 +1591,25 @@ async def main(page: ft.Page):
                                             icon=ft.Icons.MY_LOCATION,
                                             on_click=lambda e: (
                                                 selected_pos_state.__setitem__("pos", None),
-                                                asyncio.create_task(_load_venues_and_map(True)),
+                                                asyncio.create_task(_load_venues_and_map(True, False)),
+                                            ),
+                                        ),
+                                        ft.OutlinedButton(
+                                            "Approximate via IP",
+                                            icon=ft.Icons.PUBLIC,
+                                            on_click=lambda e: (
+                                                selected_pos_state.__setitem__("pos", None),
+                                                asyncio.create_task(_load_venues_and_map(False, True)),
                                             ),
                                         ),
                                         ft.OutlinedButton(
                                             "Show venues only",
-                                            on_click=lambda e: asyncio.create_task(_load_venues_and_map(False)),
+                                            on_click=lambda e: asyncio.create_task(_load_venues_and_map(False, False)),
+                                        ),
+                                        ft.OutlinedButton(
+                                            "Clear map",
+                                            icon=ft.Icons.CLEAR,
+                                            on_click=_clear_map_selection,
                                         ),
                                     ],
                                     spacing=10,
@@ -1581,7 +1644,7 @@ async def main(page: ft.Page):
             
             container.controls.append(venues_content)
             page.update()
-            asyncio.create_task(_load_venues_and_map(True))
+            asyncio.create_task(_load_venues_and_map(True, False))
         
         
         async def fetch_details():
